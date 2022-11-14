@@ -23,7 +23,7 @@ services:
     environment:
       - KC_HEALTH_ENABLED=true
       - KC_PROXY=edge
-      - KC_DB=postgres
+      - KC_HOSTNAME_STRICT_HTTPS=false
       - KC_HOSTNAME=$$config_keycloak_domain
       - KEYCLOAK_ADMIN=$$config_admin_user
       - KEYCLOAK_ADMIN_PASSWORD=$$secret_keycloak_admin_password
