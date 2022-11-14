@@ -1,5 +1,5 @@
 templateVersion: 1.0.0
-defaultVersion: '20.0'
+defaultVersion: '19.0'
 documentation: https://www.keycloak.org/documentation
 type: keycloak
 name: Keycloak
@@ -23,7 +23,6 @@ services:
     environment:
       - KC_HEALTH_ENABLED=true
       - KC_PROXY=edge
-      - KC_DB=postgres
       - KC_HOSTNAME=$$config_keycloak_domain
       - KEYCLOAK_ADMIN=$$config_admin_user
       - KEYCLOAK_ADMIN_PASSWORD=$$secret_keycloak_admin_password
@@ -34,7 +33,6 @@ services:
       - '8080'
   $$id-postgresql:
     name: PostgreSQL
-    depends_on: []
     image: postgres:14-alpine
     volumes:
       - $$id-postgresql-data:/var/lib/postgresql/data
