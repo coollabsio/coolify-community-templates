@@ -1,4 +1,4 @@
-templateVersion: 1.0.0
+templateVersion: 1.0.1
 defaultVersion: v3.6
 documentation: https://github.com/freyacodes/Lavalink
 description: Standalone audio sending node based on Lavaplayer.
@@ -18,12 +18,12 @@ services:
     volumes:
       - $$id-lavalink:/lavalink
     ports:
-      - '2333'
+      - "2333"
     files:
       - location: /opt/Lavalink/application.yml
         content: |-
           server:
-            port: $$config_port
+            port: 2333
             address: 0.0.0.0
           lavalink:
             server:
@@ -50,13 +50,9 @@ services:
                 max-file-size: 1GB
                 max-history: 30
 variables:
-  - id: $$config_port
-    name: PORT
-    label: Port
-    defaultValue: '2333'
-    required: true
   - id: $$secret_password
     name: PASSWORD
     label: Password
     defaultValue: $$generate_password
     required: true
+    showOnConfiguration: true
