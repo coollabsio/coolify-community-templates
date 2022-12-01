@@ -55,4 +55,5 @@ variables:
     label: Password
     defaultValue: $$generate_password
     required: true
+    description: ""
     showOnConfiguration: true
