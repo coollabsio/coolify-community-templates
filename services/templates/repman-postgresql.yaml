@@ -1,0 +1,248 @@
+templateVersion: 1.0.0
+defaultVersion: 1.4.0
+documentation: https://repman.io/
+type: repman-postgresql
+name: Repman
+subname: (postgresql)
+description: Free and Open Source PHP Repository Manager
+labels:
+  - "php"
+  - "composer"
+  - "repository"
+services:
+  $$id:
+    name: App
+    depends_on:
+      - $$id-postgresql
+    image: "buddy/repman:$$core_version"
+    sysctls:
+      net.core.somaxconn: 2048
+    command: >
+      bash -c 'bin/console d:m:m --no-interaction &&
+      bin/console messenger:setup-transports --no-interaction &&
+      bin/console repman:security:update-db &&
+      bin/console assets:install &&
+      php-fpm'
+    volumes:
+      - "$$id-app-public:/app/public"
+      - "$$id-app-var:/app/var"
+    environment:
+      - APP_HOST=$$config_app_host
+      - APP_DEBUG=$$config_app_debug
+      - MAILER_DSN=$$config_mailer_dsn
+      - MAILER_SENDER=$$config_mailer_sender
+      - DATABASE_URL=$$secret_database_url
+      - APP_DOMAIN_SEPARATOR=$$config_app_domain_separator
+      - APP_ORGANIZATION_SEPARATOR=$$config_app_organization_separator
+      - APP_ALLOWED_PACKAGE_TYPES=$$config_app_allowed_package_types
+      - OAUTH_GITHUB_CLIENT_ID=$$secret_ouath_github_client_id
+      - OAUTH_GITHUB_CLIENT_SECRET=$$secret_ouath_github_client_secret
+      - OAUTH_GITLAB_CLIENT_ID=$$secret_ouath_gitlab_client_id
+      - OAUTH_GITLAB_CLIENT_SECRET=$$secret_ouath_gitlab_client_secret
+      - OAUTH_BITBUCKET_CLIENT_ID=$$secret_ouath_bitbucket_client_id
+      - OAUTH_BITBUCKET_CLIENT_SECRET=$$secret_ouath_bitbucket_client_secret
+      - OAUTH_BUDDY_CLIENT_ID=$$secret_ouath_buddy_client_id
+      - OAUTH_BUDDY_CLIENT_SECRET=$$secret_ouath_buddy_client_secret
+
+  $$id_consumer:
+    name: App Consumer
+    depends_on:
+      - $$id-postgresql
+    image: "buddy/repman:$$core_version"
+    command: [ 'bin/console', 'messenger:consume', 'async', '--limit=500' ]
+    volumes:
+      - "$$id-app-var:/app/var"
+    environment:
+      - APP_HOST=$$config_app_host
+      - APP_DEBUG=$$config_app_debug
+      - MAILER_DSN=$$config_mailer_dsn
+      - MAILER_SENDER=$$config_mailer_sender
+      - DATABASE_URL=$$secret_database_url
+      - APP_DOMAIN_SEPARATOR=$$config_app_domain_separator
+      - APP_ORGANIZATION_SEPARATOR=$$config_app_organization_separator
+      - APP_ALLOWED_PACKAGE_TYPES=$$config_app_allowed_package_types
+      - OAUTH_GITHUB_CLIENT_ID=$$secret_ouath_github_client_id
+      - OAUTH_GITHUB_CLIENT_SECRET=$$secret_ouath_github_client_secret
+      - OAUTH_GITLAB_CLIENT_ID=$$secret_ouath_gitlab_client_id
+      - OAUTH_GITLAB_CLIENT_SECRET=$$secret_ouath_gitlab_client_secret
+      - OAUTH_BITBUCKET_CLIENT_ID=$$secret_ouath_bitbucket_client_id
+      - OAUTH_BITBUCKET_CLIENT_SECRET=$$secret_ouath_bitbucket_client_secret
+      - OAUTH_BUDDY_CLIENT_ID=$$secret_ouath_buddy_client_id
+      - OAUTH_BUDDY_CLIENT_SECRET=$$secret_ouath_buddy_client_secret
+
+  $$id_cron:
+    name: App CRON
+    depends_on:
+      - $$id-postgresql
+    image: "buddy/repman:$$core_version"
+    command: [ 'crond', '-f', '-L', '/app/var/log/cron.log' ]
+    volumes:
+      - "$$id-app-var:/app/var"
+    environment:
+      - APP_HOST=$$config_app_host
+      - APP_DEBUG=$$config_app_debug
+      - MAILER_DSN=$$config_mailer_dsn
+      - MAILER_SENDER=$$config_mailer_sender
+      - DATABASE_URL=$$secret_database_url
+      - APP_DOMAIN_SEPARATOR=$$config_app_domain_separator
+      - APP_ORGANIZATION_SEPARATOR=$$config_app_organization_separator
+      - APP_ALLOWED_PACKAGE_TYPES=$$config_app_allowed_package_types
+      - OAUTH_GITHUB_CLIENT_ID=$$secret_ouath_github_client_id
+      - OAUTH_GITHUB_CLIENT_SECRET=$$secret_ouath_github_client_secret
+      - OAUTH_GITLAB_CLIENT_ID=$$secret_ouath_gitlab_client_id
+      - OAUTH_GITLAB_CLIENT_SECRET=$$secret_ouath_gitlab_client_secret
+      - OAUTH_BITBUCKET_CLIENT_ID=$$secret_ouath_bitbucket_client_id
+      - OAUTH_BITBUCKET_CLIENT_SECRET=$$secret_ouath_bitbucket_client_secret
+      - OAUTH_BUDDY_CLIENT_ID=$$secret_ouath_buddy_client_id
+      - OAUTH_BUDDY_CLIENT_SECRET=$$secret_ouath_buddy_client_secret
+    files:
+      - location: /var/spool/cron/crontabs
+        content: >-
+          */5 * * * * /app/bin/console repman:proxy:sync-releases
+          */6 * * * * /app/bin/console repman:proxy:sync-metadata
+          0 */2 * * * /app/bin/console repman:security:update-db
+          0 1 * * * /app/bin/console repman:package:clear-old-dists
+  $$id-postgresql:
+    name: PostgreSQL
+    image: postgres:14-alpine
+    volumes:
+      - $$id-postgresql-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=$$secret_postgres_password
+      - POSTGRES_USER=$$config_postgres_user
+      - POSTGRES_DB=$$config_postgres_db
+
+  $$id-nginx:
+    image: nginx:1.17-alpine
+    depends_on:
+      - $$id
+    ports:
+      - "80"
+    volumes:
+      - "$$id-app-public:/app/public"
+    files:
+      - location: /etc/nginx/conf.d/default.conf
+        content: >-
+          server {
+              listen 80;
+              root /app/public;
+              index index.php index.html;
+              server_name $$config_app_host;
+
+              location / {
+                  try_files $uri $uri/ /index.php?$query_string;
+              }
+
+              location ~ \.php$ {
+                  try_files $uri =404;
+                  fastcgi_split_path_info ^(.+\.php)(/.+)$;
+                  fastcgi_pass $$id:9000;
+                  fastcgi_index index.php;
+                  include fastcgi_params;
+                  fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+                  fastcgi_param PATH_INFO $fastcgi_path_info;
+              }
+          }
+
+
+variables:
+  - id: $$config_app_host
+    name: APP_HOST
+    label: App Host
+    defaultValue: $$generate_domain
+    description: ""
+  - id: $$config_app_debug
+    name: APP_DEBUG
+    label: App Debug
+    defaultValue: "0"
+    description: "0 - debugging disabled, 1 - debugging enabled"
+  - id: $$config_app_domain_separator
+    name: APP_DOMAIN_SEPARATOR
+    label: App Domain Separator
+    defaultValue: "."
+    description: ""
+  - id: $$config_app_organization_separator
+    name: APP_ORGANIZATION_SEPARATOR
+    label: App Organization Separator
+    defaultValue: "."
+    description: ""
+  - id: $$config_app_allowed_package_types
+    name: APP_ALLOWED_PACKAGE_TYPES
+    label: List of Allowed Packages Types
+    defaultValue: "git,github,gitlab,bitbucket,subversion,mercurial,pear,artifact,path"
+    description: ""
+  - id: $$secret_ouath_github_client_id
+    name: OAUTH_GITHUB_CLIENT_ID
+    label: GITHUB OAuth Client ID
+    defaultValue: ""
+    description: ""
+  - id: $$secret_ouath_github_client_secret
+    name: OAUTH_GITHUB_CLIENT_SECRET
+    label: GITHUB OAuth Client Secret
+    defaultValue: ""
+    description: ""
+  - id: $$secret_ouath_gitlab_client_id
+    name: OAUTH_GITLAB_CLIENT_ID
+    label: GITLAB OAuth Client ID
+    defaultValue: ""
+    description: ""
+  - id: $$secret_ouath_gitlab_client_secret
+    name: OAUTH_GITLAB_CLIENT_SECRET
+    label: GITLAB OAuth Client Secret
+    defaultValue: ""
+    description: ""
+  - id: $$secret_ouath_bitbucket_client_id
+    name: OAUTH_BITBUCKET_CLIENT_ID
+    label: BITBUCKET OAuth Client ID
+    defaultValue: ""
+    description: ""
+  - id: $$secret_ouath_bitbucket_client_secret
+    name: OAUTH_BITBUCKET_CLIENT_SECRET
+    label: BITBUCKET OAuth Client Secret
+    defaultValue: ""
+    description: ""
+  - id: $$secret_ouath_buddy_client_id
+    name: OAUTH_BUDDY_CLIENT_ID
+    label: BUDDY OAuth Client ID
+    defaultValue: ""
+    description: ""
+  - id: $$secret_ouath_buddy_client_secret
+    name: OAUTH_BUDDY_CLIENT_SECRET
+    label: BUDDY OAuth Client Secret
+    defaultValue: ""
+    description: ""
+  - id: $$config_mailer_dsn
+    name: MAILER_DSN
+    label: Mailer DSN
+    defaultValue: smtp://mailhog:1025
+    description: ""
+  - id: $$config_mailer_sender
+    name: MAILER_SENDER
+    label: Mailer Sender
+    defaultValue: repman@buddy.works
+    description: ""
+  - id: $$secret_database_url
+    name: DATABASE_URL
+    label: Database URL for PostgreSQL
+    defaultValue: >-
+      postgresql://$$config_postgres_user:$$secret_postgres_password@$$id-postgresql:5432/$$config_postgres_db
+    description: ""
+  - id: $$config_postgres_user
+    main: $$id-postgresql
+    name: POSTGRES_USER
+    label: PostgreSQL Username
+    defaultValue: postgresql
+    description: ""
+  - id: $$secret_postgres_password
+    main: $$id-postgresql
+    name: POSTGRES_PASSWORD
+    label: PostgreSQL Password
+    defaultValue: $$generate_password
+    description: ""
+    showOnConfiguration: true
+  - id: $$config_postgres_db
+    main: $$id-postgresql
+    name: POSTGRES_DB
+    label: PostgreSQL Database
+    defaultValue: plausible
+    description: ""
