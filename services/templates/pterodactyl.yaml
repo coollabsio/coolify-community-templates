@@ -1,0 +1,245 @@
+templateVersion: 1.0.0
+defaultVersion: v1.11.2
+documentation: https://pterodactyl.io/project/introduction.html
+type: pterodactyl
+name: Pterodactyl
+description: Pterodactyl® is a free, open-source game server management panel.
+labels:
+  - game
+services:
+  $$id:
+    name: pterodactyl-panel
+    image: ghcr.io/pterodactyl/panel:$$core_version
+    ports: 
+      - '80'
+    volumes:
+      - $$id-var:/app/var
+      - $$id-logs:/var/storage/logs
+    depends_on:
+      - $$id-mariadb
+      - $$id-redis
+    command: >-
+      /usr/bin/supervisord -n -c /etc/supervisord_new.conf
+    environment:
+      - ADMIN_USER=$$config_admin_user
+      - ADMIN_EMAIL=$$config_admin_email
+      - ADMIN_PASSWORD=$$secret_admin_password
+      - APP_KEY=$$secret_app_key
+      - APP_ENV=production
+      - APP_ENVIRONMENT_ONLY=false
+      - APP_DEBUG=false
+      - APP_THEME=pterodactyl
+      - APP_TIMEZONE=UTC
+      - APP_URL=$$config_app_url
+      - APP_LOCALE=en
+      - CACHE_DRIVER=redis
+      - SESSION_DRIVER=redis
+      - QUEUE_DRIVER=redis
+      - DB_HOST=$$id-mariadb
+      - DB_PORT=3306
+      - DB_DATABASE=$$config_mariadb_db
+      - DB_USERNAME=$$config_mariadb_user
+      - DB_PASSWORD=$$secret_mariadb_password
+      - REDIS_HOST=$$id-redis
+      - REDIS_PASSWORD=$$secret_redis_password
+      - REDIS_PORT=6379
+    files:
+      - location: /app/app/Console/Commands/InitCommand.php
+        content: >
+          <?php
+
+          namespace Pterodactyl\Console\Commands;
+
+          use Illuminate\Console\Command;
+          use Pterodactyl\Models\User;
+          use Pterodactyl\Services\Users\UserCreationService;
+          use Pterodactyl\Services\Users\UserUpdateService;
+
+          class InitCommand extends Command
+          {
+              protected $description = 'Custom coolify command to init the system';
+
+              protected $signature = 'p:init';
+
+              /**
+              * VersionCommand constructor.
+              */
+              public function __construct(private UserCreationService $creationService, private UserUpdateService $updateService)
+              {
+                  parent::__construct();
+              }
+
+              /**
+              * Handle execution of command.
+              */
+              public function handle()
+              {
+                  $username = $_ENV["ADMIN_USER"];
+                  $email = $_ENV["ADMIN_EMAIL"];
+                  $password = $_ENV["ADMIN_PASSWORD"];
+                  $name_first = "Admin";
+                  $name_last = "User";
+                  $root_admin = 1;
+
+                  $user = User::find(1);
+
+                  if($user)
+                  {
+                      $this->updateService->handle($user, compact('email', 'username', 'name_first', 'name_last', 'password', 'root_admin'));
+                      $this->table(['Field', 'Value'], [
+                          ['UUID', $user->uuid],
+                          ['Email', $user->email],
+                          ['Username', $user->username],
+                          ['Name', $user->name]
+                      ]);
+                  }
+                  else
+                  {
+                      $user = $this->creationService->handle(compact('email', 'username', 'name_first', 'name_last', 'password', 'root_admin'));
+                      $this->table(['Field', 'Value'], [
+                          ['UUID', $user->uuid],
+                          ['Email', $user->email],
+                          ['Username', $user->username],
+                          ['Name', $user->name],
+                          ['Admin', $user->root_admin ? 'Yes' : 'No'],
+                      ]);
+                  }
+              }
+          }
+      - location: /etc/supervisord_new.conf
+        content: |
+          [unix_http_server]
+          file=/tmp/supervisor.sock                       ; path to your socket file
+
+          [supervisord]
+          logfile=/var/log/supervisord/supervisord.log    ; supervisord log file
+          logfile_maxbytes=50MB                           ; maximum size of logfile before rotation
+          logfile_backups=2                               ; number of backed up logfiles
+          loglevel=error                                  ; info, debug, warn, trace
+          pidfile=/var/run/supervisord.pid                ; pidfile location
+          nodaemon=false                                  ; run supervisord as a daemon
+          minfds=1024                                     ; number of startup file descriptors
+          minprocs=200                                    ; number of process descriptors
+          user=root                                       ; default user
+          childlogdir=/var/log/supervisord/               ; where child log files will live
+
+          [rpcinterface:supervisor]
+          supervisor.rpcinterface_factory = supervisor.rpcinterface:make_main_rpcinterface
+
+          [supervisorctl]
+          serverurl=unix:///tmp/supervisor.sock         ; use a unix:// URL  for a unix socket
+
+          [program:php-fpm]
+          command=/usr/local/sbin/php-fpm -F
+          autostart=true
+          autorestart=true
+
+          [program:queue-worker]
+          command=/usr/local/bin/php /app/artisan queue:work --queue=high,standard,low --sleep=3 --tries=3
+          user=nginx
+          autostart=true
+          autorestart=true
+
+          [program:nginx]
+          command=/usr/sbin/nginx -g 'daemon off;'
+          autostart=true
+          autorestart=true
+          priority=10
+          stdout_events_enabled=true
+
+          [program:ptoerdactyl-init]
+          command=/usr/local/bin/php /app/artisan p:init
+          autostart=true
+          autorestart=false
+          stdout_logfile=/dev/stdout
+          stdout_logfile_maxbytes=0
+          stderr_logfile=/dev/stderr
+          stderr_logfile_maxbytes=0
+          environment=LOG_CHANNEL="stderr"
+  $$id-mariadb:
+    name: pterodactyl-database
+    image: bitnami/mariadb:latest
+    volumes:
+      - $$id-database:/bitnami/mariadb
+    environment:
+      - MARIADB_DATABASE=$$config_mariadb_db
+      - MARIADB_USER=$$config_mariadb_user
+      - MARIADB_PASSWORD=$$secret_mariadb_password
+      - MARIADB_ROOT_PASSWORD=$$secret_mariadb_root_password
+  $$id-redis:
+    name: pterodactyl-cache
+    image: bitnami/redis:7.0
+    environment:
+      - REDIS_PASSWORD=$$secret_redis_password
+      - REDIS_AOF_ENABLED=no
+variables:
+  - id: $$config_admin_user
+    name: ADMIN_USER
+    label: Admin User
+    description: ''
+    defaultValue: ''
+    placeholder: Admin
+    required: true
+  - id: $$config_admin_email
+    name: ADMIN_EMAIL
+    label: Admin E-Mail
+    description: ''
+    defaultValue: ''
+    placeholder: admin@example.com
+    required: true
+  - id: $$secret_admin_password
+    name: ADMIN_PASSWORD
+    label: Admin Password
+    description: ''
+    defaultValue: $$generate_password
+    readOnly: false
+    showOnConfiguration: true
+  - id: $$config_app_url
+    name: APP_URL
+    label: App URL
+    description: ''
+    defaultValue: $$generate_fqdn
+    readOnly: true
+  - id: $$secret_app_key
+    name: APP_KEY
+    label: App Key
+    description: 'Should never be changed execpt you know what you are doing!'
+    defaultValue: $$generate_hex(16)
+    readOnly: false
+    showOnConfiguration: true
+  - id: $$config_mariadb_db
+    main: $$id-mariadb
+    name: MARIADB_DB
+    label: MariaDB Database
+    description: ''
+    defaultValue: 'panel'
+    readOnly: true
+  - id: $$config_mariadb_user
+    main: $$id-mariadb
+    name: MARIADB_USER
+    label: MariaDB Username
+    description: ''
+    defaultValue: $$generate_username
+    readOnly: true
+  - id: $$secret_mariadb_password
+    main: $$id-mariadb
+    name: MARIADB_PASSWORD
+    label: MariaDB Password
+    description: ''
+    defaultValue: $$generate_password
+    readOnly: true
+    showOnConfiguration: true
+  - id: $$secret_mariadb_root_password
+    main: $$id-mariadb
+    name: MARIADB_ROOT_PASSWORD
+    label: MariaDB Root Password
+    description: ''
+    defaultValue: $$generate_password
+    readOnly: true
+  - id: $$secret_redis_password
+    main: $$id-redis
+    name: REDIS_PASSWORD
+    label: Redis Password
+    description: ''
+    defaultValue: $$generate_password
+    readOnly: true
