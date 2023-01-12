@@ -1,0 +1,81 @@
+
+templateVersion: 1.0.0
+defaultVersion: 1.5.0-16-debian
+documentation: https://docs.soketi.app/
+type: soketi
+subtype: (Without DB)
+name: Soketi
+description: Simple, fast, and resilient open-source WebSockets server as Pusher replacement.
+labels:
+  - "pusher"
+  - "websockets"
+services:
+  $$id:
+    name: Soketi
+    image: "quay.io/soketi/soketi:$$core_version"
+    environment:
+      - SOKETI_DEBUG=$$config_debug
+      - SOKETI_METRICS_ENABLED=$$config_metrics_enabled
+      - SOKETI_DEFAULT_APP_ID=$$secret_app_id
+      - SOKETI_DEFAULT_APP_KEY=$$secret_app_key
+      - SOKETI_DEFAULT_APP_SECRET=$$secret_app_secret
+      - SOKETI_DEFAULT_APP_MAX_CONNS=$$config_app_max_conns
+      - SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES=$$config_app_enable_client_messages
+      - SOKETI_DEFAULT_APP_USER_AUTHENTICATION=$$config_app_user_authentication
+    proxy:
+      - port: "6001"
+      - port: "9601"
+        domain: $$config_metrics_url
+
+variables:
+  - id: $$config_metrics_url
+    name: METRICS_URL
+    label: Metrics URL
+    defaultValue: ""
+    description: ""
+  - id: $$config_debug
+    name: SOKETI_DEBUG
+    label: App Debug
+    defaultValue: "0"
+    description: "0 - debugging disabled, 1 - debugging enabled"
+  - id: $$config_metrics_enabled
+    name: SOKETI_METRICS_ENABLED
+    label: Metrics Enabled
+    defaultValue: "0"
+    description: "0 - metrics disabled, 1 - metrics enabled"
+  - id: $$secret_app_id
+    required: true
+    name: SOKETI_DEFAULT_APP_ID
+    label: App ID
+    defaultValue: $$generate_password
+    description: "The default app ID for the array driver."
+    showOnConfiguration: true
+  - id: $$secret_app_key
+    required: true
+    name: SOKETI_DEFAULT_APP_KEY
+    label: App Key
+    defaultValue: $$generate_password
+    description: "The default app key for the array driver."
+    showOnConfiguration: true
+  - id: $$secret_app_secret
+    required: true
+    name: SOKETI_DEFAULT_APP_SECRET
+    label: App Secret
+    defaultValue: $$generate_password
+    description: "The default app secret for the array driver."
+    showOnConfiguration: true
+  - id: $$config_app_max_conns
+    name: SOKETI_DEFAULT_APP_MAX_CONNS
+    label: App Max Connections
+    defaultValue: "-1"
+    description: "The default app's limit of concurrent connections."
+  - id: $$config_app_enable_client_messages
+    name: SOKETI_DEFAULT_APP_ENABLE_CLIENT_MESSAGES
+    label: App Client Messages
+    defaultValue: "false"
+    description: "false - client messages disabled, true - client messages enabled"
+  - id: $$config_app_user_authentication
+    name: SOKETI_DEFAULT_APP_USER_AUTHENTICATION
+    label: App User Authentication
+    defaultValue: "false"
+    description: "false - user auth disabled, true - user auth enabled"
