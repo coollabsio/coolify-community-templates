@@ -1,0 +1,88 @@
+templateVersion: 1.0.0
+defaultVersion: "7.7"
+documentation: https://docs.mattermost.com/
+type: mattermost
+subtype: (postgresql)
+name: Mattermost
+description: Mattermost is an open source platform for secure collaboration across the entire software development lifecycle.
+labels:
+  - "management"
+  - "collaboration"
+services:
+  $$id:
+    name: Mattermost
+    image: mattermost/mattermost-enterprise-edition:$$core_version
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 200
+    volumes:
+      - $$id-mattermost-config:/mattermost/config:rw
+      - $$id-mattermost-data:/mattermost/data:rw
+      - $$id-mattermost-logs:/mattermost/logs:rw
+      - $$id-mattermost-plugins:/mattermost/plugins:rw
+      - $$id-mattermost-client-plugins:/mattermost/client/plugins:rw
+      - $$id-mattermost-bleve-indexes:/mattermost/bleve-indexes:rw
+    environment:
+      - MM_BLEVESETTINGS_INDEXDIR=/mattermost/bleve-indexes
+      - MM_SQLSETTINGS_DRIVERNAME=postgres
+      - MM_SQLSETTINGS_DATASOURCE=$$secret_db_connection_string
+      - MM_SERVICESETTINGS_SITEURL=$$config_url
+      - CALLS_PORT=$$config_calls_port
+      - TZ=$$config_timezone
+    proxy:
+      - port: "8065"
+      - port: "8443"
+        domain: $$config_metrics_url
+        hostPort: $$config_calls_port
+  $$id-postgresql:
+    name: Mattermost PostgreSQL
+    image: postgres:13-alpine
+    volumes:
+      - $$id-postgresql-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=$$config_postgres_user
+      - POSTGRES_PASSWORD=$$secret_postgres_password
+      - POSTGRES_DB=$$config_postgres_db
+
+variables:
+
+  - id: $$secret_db_connection_string
+    name: DB_CONNECTION_STRING
+    label: Directus Database Url
+    defaultValue: >-
+      postgresql://$$config_postgres_user:$$secret_postgres_password@$$id-postgresql:5432/$$config_postgres_db?sslmode=disable&connect_timeout=10
+    description: ''
+  - id: $$config_postgres_db
+    main: $$id-postgresql
+    name: POSTGRES_DB
+    label: Database
+    defaultValue: directus
+    description: ''
+  - id: $$config_postgres_user
+    main: $$id-postgresql
+    name: POSTGRES_USER
+    label: User
+    defaultValue: $$generate_username
+    description: ''
+  - id: $$secret_postgres_password
+    main: $$id-postgresql
+    name: POSTGRES_PASSWORD
+    label: Password
+    defaultValue: $$generate_password
+    description: ''
+    showOnConfiguration: true
+  - id: $$config_calls_port
+    name: CALLS_PORT
+    label: Calls Port
+    defaultValue: "8443"
+    description: ""
+  - id: $$config_timezone
+    name: TZ
+    label: Timezone
+    defaultValue: "UTC"
+  - id: $$config_url
+    name: MM_SERVICESETTINGS_SITEURL
+    label: Site Url
+    defaultValue: $$generate_fqdn
+    description: ""
+
